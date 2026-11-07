@@ -504,6 +504,21 @@ class ParticleSystem {
       el.life -= delta;
       el.mesh.position.addScaledVector(el.velocity, delta);
 
+      // Projectile collision detection
+      if (el.type === 'projectile' && window.game && window.game.enemies) {
+        for (const enemy of window.game.enemies.enemies) {
+          if (enemy.hp > 0) {
+            const dist = el.mesh.position.distanceTo(enemy.mesh.position);
+            if (dist < (el.radius || 2.2)) {
+              window.game.enemies.applyDamageToEnemy(enemy, el.damage || 180, true, true);
+              this.spawnSparks(enemy.mesh.position, 16, 0xc77dff);
+              el.life = 0; // Consume projectile on hit
+              break;
+            }
+          }
+        }
+      }
+
       if (el.life <= 0) {
         this.scene.remove(el.mesh);
         this.elementals.splice(i, 1);

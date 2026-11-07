@@ -43,6 +43,11 @@ html, body {
   font-size: 16px;
 }
 
+/* Universal Hidden Utility */
+.hidden {
+  display: none !important;
+}
+
 /* 3D Viewport */
 #gameContainer {
   position: fixed;

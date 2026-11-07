@@ -22,6 +22,10 @@ class StoryDirector {
     // Quest Objective Trackers
     this.chapter1Kills = 0;
     this.chapter1KillsRequired = 3;
+    this.chapter2Kills = 0;
+    this.chapter2KillsRequired = 3;
+    this.chapter4Kills = 0;
+    this.chapter4KillsRequired = 2;
 
     this.initChapters();
   }
@@ -174,16 +178,44 @@ class StoryDirector {
       }
     }
 
-    // Boss Kurogane Defeated
-    if (enemy.type === 'boss_kurogane') {
+    // Chapter 2 Progress Check (Bamboo Forest)
+    if (this.currentChapter === 2 && (enemy.type === 'corrupted_ninja' || enemy.type === 'void_sorcerer')) {
+      this.chapter2Kills += 1;
+      const chap = this.chapters[1];
+      const newDesc = `Defeat the ambush in the Bamboo Forest (${this.chapter2Kills}/${this.chapter2KillsRequired})`;
+      this.updateTrackerUI(chap.title, newDesc, 'Bamboo Grove');
+
+      if (this.chapter2Kills >= this.chapter2KillsRequired) {
+        this.playCutscene(chap.epilogue, () => {
+          this.startChapter(3);
+        });
+      }
+    }
+
+    // Chapter 3 Progress Check: Boss Kurogane Defeated
+    if (this.currentChapter === 3 && enemy.type === 'boss_kurogane') {
       const chap = this.chapters[2];
       this.playCutscene(chap.epilogue, () => {
         this.startChapter(4);
       });
     }
 
-    // Final Boss Malakor Defeated
-    if (enemy.type === 'boss_malakor') {
+    // Chapter 4 Progress Check: Sky Island Guardians
+    if (this.currentChapter === 4 && (enemy.type === 'void_sorcerer' || enemy.type === 'corrupted_ninja')) {
+      this.chapter4Kills += 1;
+      const chap = this.chapters[3];
+      const newDesc = `Purge the Celestial Island Guardians (${this.chapter4Kills}/${this.chapter4KillsRequired})`;
+      this.updateTrackerUI(chap.title, newDesc, 'Sky Islands');
+
+      if (this.chapter4Kills >= this.chapter4KillsRequired) {
+        this.playCutscene(chap.epilogue, () => {
+          this.startChapter(5);
+        });
+      }
+    }
+
+    // Chapter 5 Progress Check: Final Boss Malakor Defeated
+    if (this.currentChapter === 5 && enemy.type === 'boss_malakor') {
       const chap = this.chapters[4];
       this.playCutscene(chap.epilogue, () => {
         this.triggerVictoryEnding();

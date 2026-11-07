@@ -80,8 +80,10 @@ class CombatEngine {
     const arcColor = this.isAwakened ? 0xc77dff : 0x00f0ff;
     this.particles.spawnSlashArc(this.char.position, forward, 2.6, arcColor);
 
-    // Hit detection against enemies
-    this.checkHitbox(forward, 2.8, 85 + comboStep * 20, false);
+    // Hit detection against enemies (with aerial_cleave passive support)
+    const hasAerial = this.game && this.game.prog && this.game.prog.unlockedSkills.has('aerial_cleave');
+    const baseDamage = 85 + comboStep * 20 + (hasAerial && comboStep === 3 ? 60 : 0);
+    this.checkHitbox(forward, 2.8, baseDamage, false);
 
     // If awakened, fire void wave automatically with basic attacks
     if (this.isAwakened) {
@@ -101,10 +103,16 @@ class CombatEngine {
     }
 
     const forward = new THREE.Vector3(0, 0, 1).applyEuler(this.char.root.rotation);
-    this.particles.spawnSlashArc(this.char.position, forward, 3.4, 0xffd166);
+    const hasDragonFire = this.game && this.game.prog && this.game.prog.unlockedSkills.has('dragon_fire');
+    if (hasDragonFire) {
+      this.particles.spawnSparks(this.char.position, 25, 0xff4500);
+      this.particles.spawnSlashArc(this.char.position, forward, 3.6, 0xff4500);
+    } else {
+      this.particles.spawnSlashArc(this.char.position, forward, 3.4, 0xffd166);
+    }
 
     // Piercing heavy strike (High stagger damage)
-    this.checkHitbox(forward, 3.6, 175, true);
+    this.checkHitbox(forward, 3.6, hasDragonFire ? 260 : 175, true);
   }
 
   // =========================================================================
@@ -141,8 +149,13 @@ class CombatEngine {
     }
 
     // High speed impulse in movement direction
-    const dashDir = dirVector.lengthSq() > 0.01 ? dirVector.clone().normalize() : new THREE.Vector3(0, 0, 1).applyEuler(this.char.root.rotation);
+    const dashDir = (dirVector && dirVector.lengthSq() > 0.01) ? dirVector.clone().normalize() : new THREE.Vector3(0, 0, 1).applyEuler(this.char.root.rotation);
     this.char.velocity.copy(dashDir.multiplyScalar(22));
+
+    // Spawn shadow decoy sparks if shadow_dash is unlocked
+    if (this.game && this.game.prog && this.game.prog.unlockedSkills.has('shadow_dash')) {
+      this.particles.spawnSparks(this.char.position, 15, 0x9d4edd);
+    }
   }
 
   // =========================================================================
@@ -158,6 +171,9 @@ class CombatEngine {
     const forward = new THREE.Vector3(0, 0, 1).applyEuler(this.char.root.rotation);
     const startPos = this.char.position.clone();
     const endPos = startPos.clone().addScaledVector(forward, 10);
+    if (this.world && typeof this.world.getTerrainHeight === 'function') {
+      endPos.y = this.world.getTerrainHeight(endPos.x, endPos.z);
+    }
 
     // Teleport dash & electric trail
     this.particles.spawnThunderDashTrail(startPos, endPos);
@@ -193,6 +209,9 @@ class CombatEngine {
 
     const forward = new THREE.Vector3(0, 0, 1).applyEuler(this.char.root.rotation);
     const targetPos = this.char.position.clone().addScaledVector(forward, 14);
+    if (this.world && typeof this.world.getTerrainHeight === 'function') {
+      targetPos.y = this.world.getTerrainHeight(targetPos.x, targetPos.z);
+    }
 
     this.particles.spawnThunderDashTrail(this.char.position, targetPos);
     this.char.position.copy(targetPos);
@@ -200,7 +219,13 @@ class CombatEngine {
     if (window.soundEngine) window.soundEngine.playThunderStep();
     if (window.voiceEngine) window.voiceEngine.speak('Thunder Step!', 'ren');
 
-    this.checkRadialHitbox(this.char.position, 6.0, 280, true);
+    const hasThunderGod = this.game && this.game.prog && this.game.prog.unlockedSkills.has('thunder_god');
+    const radius = hasThunderGod ? 10.0 : 6.0;
+    const damage = hasThunderGod ? 420 : 280;
+    if (hasThunderGod) {
+      this.particles.spawnSparks(this.char.position, 35, 0x00f0ff);
+    }
+    this.checkRadialHitbox(this.char.position, radius, damage, true);
   }
 
   useUltimate() {
@@ -224,15 +249,18 @@ class CombatEngine {
       }, i * 100);
     }
 
+    const hasSever = this.game && this.game.prog && this.game.prog.unlockedSkills.has('dimensional_sever');
+    const ultDamage = hasSever ? 1350 : 850;
     setTimeout(() => {
-      this.checkRadialHitbox(this.char.position, 12.0, 850, true, true);
+      this.checkRadialHitbox(this.char.position, 14.0, ultDamage, true, true);
     }, 900);
   }
 
   toggleAwakening() {
     if (!this.isAwakened && this.voidEnergy >= 100) {
       this.isAwakened = true;
-      this.awakenedTimer = 20.0;
+      const hasCore = this.game && this.game.prog && this.game.prog.unlockedSkills.has('void_core');
+      this.awakenedTimer = hasCore ? 30.0 : 20.0;
       this.voidEnergy = 100;
       this.char.setAwakened(true);
 
@@ -329,6 +357,14 @@ class CombatEngine {
 
       // Stagger attacker
       enemy.stagger = Math.min(enemy.maxStagger, enemy.stagger + 80);
+
+      // Check parry_counter passive
+      if (this.game && this.game.prog && this.game.prog.unlockedSkills.has('parry_counter')) {
+        const counterDamage = Math.floor(220 * (this.isAwakened ? 1.5 : 1.0));
+        this.enemyManager.applyDamageToEnemy(enemy, counterDamage, true, true);
+        this.particles.spawnSlashArc(enemy.mesh.position, new THREE.Vector3(0, 0, 1), 3.0, 0xffd166);
+        this.addCombo(2, counterDamage);
+      }
       return;
     }
 
@@ -411,7 +447,8 @@ class CombatEngine {
   }
 
   addVoidEnergy(amount) {
-    this.voidEnergy = Math.min(100, this.voidEnergy + amount);
+    const mult = (this.game && this.game.prog && this.game.prog.unlockedSkills.has('void_core')) ? 1.5 : 1.0;
+    this.voidEnergy = Math.min(100, this.voidEnergy + Math.floor(amount * mult));
   }
 
   // =========================================================================
@@ -443,7 +480,8 @@ class CombatEngine {
     // Awakening duration
     if (this.isAwakened) {
       this.awakenedTimer -= delta;
-      this.voidEnergy = (this.awakenedTimer / 20.0) * 100;
+      const maxAwakenTime = (this.game && this.game.prog && this.game.prog.unlockedSkills.has('void_core')) ? 30.0 : 20.0;
+      this.voidEnergy = Math.max(0, (this.awakenedTimer / maxAwakenTime) * 100);
       this.stamina = this.maxStamina; // Unlimited stamina during awakening
 
       if (this.awakenedTimer <= 0) {

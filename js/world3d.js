@@ -846,6 +846,8 @@ class World3D {
       80
     );
     this.sunLight.position.copy(this.sunMesh.position);
+    this.eclipseRing.position.copy(this.sunMesh.position);
+    this.eclipseRing.lookAt(0, 0, 0);
 
     // Eclipse visual effects
     if (this.isEclipse) {

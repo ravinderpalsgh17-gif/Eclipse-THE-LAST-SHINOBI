@@ -32,6 +32,17 @@ class Character3D {
     this.scene.add(this.root);
   }
 
+  setCharacterType(charType) {
+    this.charType = charType;
+    while (this.root.children.length > 0) {
+      this.root.remove(this.root.children[0]);
+    }
+    this.nodes = {};
+    this.weapons = {};
+    this.wings = null;
+    this.buildCharacterMesh();
+  }
+
   // =========================================================================
   // SKELETAL RIG GENERATION
   // =========================================================================
@@ -150,17 +161,52 @@ class Character3D {
     headGroup.add(ribbon);
     this.nodes.ribbon = ribbon;
 
-    // Sculpted Spiky Anime Hair
+    // Sculpted Anime Hair & Headgear by Character
     const hairGroup = new THREE.Group();
-    const spikeCount = 9;
-    for (let i = 0; i < spikeCount; i++) {
-      const angle = (i / spikeCount) * Math.PI * 1.8 - Math.PI * 0.9;
-      const spikeGeom = new THREE.ConeGeometry(0.1, 0.38, 4);
-      const spike = new THREE.Mesh(spikeGeom, hairMat);
-      spike.position.set(Math.sin(angle) * 0.18, 0.22, Math.cos(angle) * 0.18);
-      spike.rotation.x = -0.4;
-      spike.rotation.z = -Math.sin(angle) * 0.6;
-      hairGroup.add(spike);
+    if (this.charType === 'ayame') {
+      // Ayame Twin-Tails
+      const pigtailL = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.65, 6), hairMat);
+      pigtailL.position.set(-0.28, 0.1, -0.1);
+      pigtailL.rotation.set(-0.2, 0, 0.5);
+      hairGroup.add(pigtailL);
+
+      const pigtailR = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.65, 6), hairMat);
+      pigtailR.position.set(0.28, 0.1, -0.1);
+      pigtailR.rotation.set(-0.2, 0, -0.5);
+      hairGroup.add(pigtailR);
+
+      // Front Bangs
+      for (let i = 0; i < 5; i++) {
+        const bang = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.28, 4), hairMat);
+        bang.position.set((i - 2) * 0.08, 0.16, 0.22);
+        bang.rotation.x = -0.2;
+        hairGroup.add(bang);
+      }
+    } else if (this.charType === 'kaito') {
+      // Kaito Ronin Straw Sedge Hat (Kasa)
+      const hatGeom = new THREE.ConeGeometry(0.58, 0.22, 10);
+      const hatMat = new THREE.MeshStandardMaterial({ color: 0x8b7355, roughness: 0.9 });
+      const hat = new THREE.Mesh(hatGeom, hatMat);
+      hat.position.set(0, 0.28, 0);
+      hairGroup.add(hat);
+
+      // Long Ronin Ponytail
+      const ponytail = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.04, 0.8, 6), hairMat);
+      ponytail.position.set(0, 0.0, -0.32);
+      ponytail.rotation.x = -0.4;
+      hairGroup.add(ponytail);
+    } else {
+      // Ren Spiky Shinobi Hair
+      const spikeCount = 9;
+      for (let i = 0; i < spikeCount; i++) {
+        const angle = (i / spikeCount) * Math.PI * 1.8 - Math.PI * 0.9;
+        const spikeGeom = new THREE.ConeGeometry(0.1, 0.38, 4);
+        const spike = new THREE.Mesh(spikeGeom, hairMat);
+        spike.position.set(Math.sin(angle) * 0.18, 0.22, Math.cos(angle) * 0.18);
+        spike.rotation.x = -0.4;
+        spike.rotation.z = -Math.sin(angle) * 0.6;
+        hairGroup.add(spike);
+      }
     }
     headGroup.add(hairGroup);
 
@@ -172,9 +218,16 @@ class Character3D {
     this.buildLeg(hips, 'left', -0.18, giMat, trimMat);
     this.buildLeg(hips, 'right', 0.18, giMat, trimMat);
 
-    // 6. Weapons: Primary Katana in Right Hand, Off-Hand Wakizashi in Left Hand
-    this.buildKatana('right', metalMat, goldMat, trimMat);
-    this.buildWakizashi('left', metalMat, goldMat, trimMat);
+    // 6. Weapons by Character
+    if (this.charType === 'ayame') {
+      this.buildWakizashi('right', metalMat, goldMat, trimMat);
+      this.buildWakizashi('left', metalMat, goldMat, trimMat);
+    } else if (this.charType === 'kaito') {
+      this.buildNodachi('right', metalMat, goldMat, trimMat);
+    } else {
+      this.buildKatana('right', metalMat, goldMat, trimMat);
+      this.buildWakizashi('left', metalMat, goldMat, trimMat);
+    }
 
     // 7. Sheathed Katana on Hips
     const sheathGeom = new THREE.BoxGeometry(0.08, 0.08, 1.1);
@@ -339,6 +392,47 @@ class Character3D {
 
     this.nodes[`${handSide}Hand`].add(weaponGroup);
     this.weapons.wakizashi = weaponGroup;
+  }
+
+  buildNodachi(handSide, metalMat, goldMat, trimMat) {
+    const weaponGroup = new THREE.Group();
+
+    // Two-handed long hilt
+    const hiltGeom = new THREE.CylinderGeometry(0.05, 0.05, 0.65, 8);
+    const hilt = new THREE.Mesh(hiltGeom, trimMat);
+    hilt.position.y = 0.25;
+    weaponGroup.add(hilt);
+
+    // Golden Dragon Tsuba
+    const tsubaGeom = new THREE.CylinderGeometry(0.18, 0.18, 0.04, 12);
+    const tsuba = new THREE.Mesh(tsubaGeom, goldMat);
+    tsuba.position.y = 0.58;
+    weaponGroup.add(tsuba);
+
+    // Massive Nodachi Blade
+    const bladeGeom = new THREE.BoxGeometry(0.06, 1.95, 0.12);
+    const blade = new THREE.Mesh(bladeGeom, metalMat);
+    blade.position.set(0, 1.55, 0);
+    blade.castShadow = true;
+    weaponGroup.add(blade);
+
+    // Thunder glowing hamon edge
+    const edgeGeom = new THREE.BoxGeometry(0.015, 1.95, 0.03);
+    const edgeMat = new THREE.MeshBasicMaterial({
+      color: 0xffd166,
+      transparent: true,
+      opacity: 0.9,
+      blending: THREE.AdditiveBlending
+    });
+    const edge = new THREE.Mesh(edgeGeom, edgeMat);
+    edge.position.set(0, 1.55, 0.062);
+    weaponGroup.add(edge);
+
+    weaponGroup.rotation.x = Math.PI * 0.5;
+    weaponGroup.position.set(0, -0.05, 0.12);
+
+    this.nodes[`${handSide}Hand`].add(weaponGroup);
+    this.weapons.nodachi = weaponGroup;
   }
 
   buildAwakeningWings() {

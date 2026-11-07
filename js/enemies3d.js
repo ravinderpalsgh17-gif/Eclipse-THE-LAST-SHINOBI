@@ -5,9 +5,10 @@
  */
 
 class EnemyManager {
-  constructor(scene, particleSystem) {
+  constructor(scene, particleSystem, world = null) {
     this.scene = scene;
     this.particles = particleSystem;
+    this.world = world;
     this.enemies = [];
     this.activeBoss = null;
   }
@@ -16,20 +17,23 @@ class EnemyManager {
   // ENEMY SPAWNING FACTORY
   // =========================================================================
 
-  spawnEnemy(type, x, z, y = 0) {
+  spawnEnemy(type, x, z, y = null) {
     let enemy = null;
+    const groundY = (y !== null && y !== undefined && y !== 0) 
+      ? y 
+      : ((this.world && typeof this.world.getTerrainHeight === 'function') ? this.world.getTerrainHeight(x, z) : 0);
 
     if (type === 'void_lurker') {
-      enemy = this.createVoidLurker(x, y, z);
+      enemy = this.createVoidLurker(x, groundY, z);
     } else if (type === 'corrupted_ninja') {
-      enemy = this.createCorruptedNinja(x, y, z);
+      enemy = this.createCorruptedNinja(x, groundY, z);
     } else if (type === 'void_sorcerer') {
-      enemy = this.createVoidSorcerer(x, y, z);
+      enemy = this.createVoidSorcerer(x, groundY + 1.2, z);
     } else if (type === 'boss_kurogane') {
-      enemy = this.createBossKurogane(x, y, z);
+      enemy = this.createBossKurogane(x, groundY, z);
       this.activeBoss = enemy;
     } else if (type === 'boss_malakor') {
-      enemy = this.createBossMalakor(x, y, z);
+      enemy = this.createBossMalakor(x, groundY + 2.0, z);
       this.activeBoss = enemy;
     }
 
@@ -511,6 +515,10 @@ class EnemyManager {
       } else if (dist < 32) {
         // Chase Player
         e.mesh.position.addScaledVector(dir, e.speed * delta);
+        if (this.world && typeof this.world.getTerrainHeight === 'function') {
+          const groundY = this.world.getTerrainHeight(e.mesh.position.x, e.mesh.position.z);
+          e.mesh.position.y = groundY + (e.type === 'malakor' ? 3.5 : 0);
+        }
       }
     }
   }

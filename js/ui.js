@@ -52,15 +52,99 @@ class UIController {
       });
     });
 
-    // Skill Tree Unlock Buttons
-    document.querySelectorAll('.btn-unlock-skill').forEach(btn => {
-      btn.addEventListener('click', e => {
-        const skillId = e.currentTarget.getAttribute('data-skill');
-        if (this.prog.unlockSkill(skillId)) {
-          this.refreshSkillTreeUI();
+    // Skill Tree Unlock Buttons (Delegated on grid container)
+    const treeGrid = document.querySelector('.skilltree-branches-grid');
+    if (treeGrid) {
+      treeGrid.addEventListener('click', e => {
+        const btn = e.target.closest('.btn-unlock-skill');
+        if (btn && !btn.disabled) {
+          const skillId = btn.getAttribute('data-skill');
+          if (this.prog.unlockSkill(skillId)) {
+            this.refreshSkillTreeUI();
+            this.showToast('🔮 New Skill Mastered!');
+          } else {
+            this.showToast('⚠️ Not enough Skill Points!');
+          }
         }
       });
-    });
+    }
+
+    // Combat Hotbar Clicks
+    const slot1 = document.getElementById('slotSkill1');
+    if (slot1) slot1.addEventListener('click', () => this.combat.useSkill1());
+
+    const slot2 = document.getElementById('slotSkill2');
+    if (slot2) slot2.addEventListener('click', () => this.combat.useSkill2());
+
+    const slot3 = document.getElementById('slotSkill3');
+    if (slot3) slot3.addEventListener('click', () => this.combat.useSkill3());
+
+    const slotUlt = document.getElementById('slotUltimate');
+    if (slotUlt) slotUlt.addEventListener('click', () => this.combat.useUltimate());
+
+    const slotAwake = document.getElementById('slotAwakening');
+    if (slotAwake) slotAwake.addEventListener('click', () => this.combat.toggleAwakening());
+
+    const slotPot = document.getElementById('slotPotion');
+    if (slotPot) slotPot.addEventListener('click', () => this.prog.useQuickPotion());
+
+    // Graphics Settings Listeners
+    const selGfx = document.getElementById('selectGraphicsPreset');
+    if (selGfx) {
+      selGfx.addEventListener('change', e => {
+        const val = e.target.value;
+        if (this.game && this.game.renderer) {
+          if (val === 'ultra') {
+            this.game.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2.0));
+            this.game.renderer.shadowMap.enabled = true;
+          } else if (val === 'high') {
+            this.game.renderer.setPixelRatio(1.25);
+            this.game.renderer.shadowMap.enabled = true;
+          } else {
+            this.game.renderer.setPixelRatio(1.0);
+            this.game.renderer.shadowMap.enabled = false;
+          }
+          this.showToast(`Graphics set to ${val.toUpperCase()}`);
+        }
+      });
+    }
+
+    const tglShadows = document.getElementById('toggleShadows');
+    if (tglShadows) {
+      tglShadows.addEventListener('change', e => {
+        if (this.game && this.game.renderer) {
+          this.game.renderer.shadowMap.enabled = e.target.checked;
+        }
+      });
+    }
+
+    const tglWeather = document.getElementById('toggleWeather');
+    if (tglWeather) {
+      tglWeather.addEventListener('change', e => {
+        if (this.game && this.game.particles) {
+          this.game.particles.setRainActive(e.target.checked);
+        }
+      });
+    }
+
+    const tglVoice = document.getElementById('toggleVoice');
+    if (tglVoice) {
+      tglVoice.addEventListener('change', e => {
+        if (window.voiceEngine) {
+          window.voiceEngine.enabled = e.target.checked;
+        }
+      });
+    }
+
+    // World Map Interactive Fast Travel
+    if (this.worldMapCanvas) {
+      this.worldMapCanvas.addEventListener('click', e => {
+        const rect = this.worldMapCanvas.getBoundingClientRect();
+        const clickX = ((e.clientX - rect.left) / rect.width) * this.worldMapCanvas.width;
+        const clickY = ((e.clientY - rect.top) / rect.height) * this.worldMapCanvas.height;
+        this.handleWorldMapFastTravel(clickX, clickY);
+      });
+    }
 
     // Item Action Buttons
     const btnEquip = document.getElementById('btnEquipItem');
@@ -183,6 +267,10 @@ class UIController {
       if (avatarEl) avatarEl.className = 'avatar-img kaito-avatar';
     }
 
+    if (this.game && this.game.char && typeof this.game.char.setCharacterType === 'function') {
+      this.game.char.setCharacterType(charKey);
+    }
+
     this.showToast(`Switched fighter to ${charKey.toUpperCase()}!`);
   }
 
@@ -276,6 +364,65 @@ class UIController {
         if (btn) btn.outerHTML = '<div class="node-status">MASTERED</div>';
       }
     });
+
+    // Check tier 3 unlocks
+    if (this.prog.unlockedSkills.has('parry_counter')) {
+      const node = document.querySelector('.skill-node[data-skill="aerial_cleave"]');
+      if (node && !this.prog.unlockedSkills.has('aerial_cleave')) {
+        node.className = 'skill-node available';
+        const btn = node.querySelector('.btn-unlock-skill');
+        if (btn) { btn.disabled = false; btn.textContent = 'UNLOCK (1 SP)'; }
+      }
+    }
+    if (this.prog.unlockedSkills.has('dragon_fire')) {
+      const node = document.querySelector('.skill-node[data-skill="thunder_god"]');
+      if (node && !this.prog.unlockedSkills.has('thunder_god')) {
+        node.className = 'skill-node available';
+        const btn = node.querySelector('.btn-unlock-skill');
+        if (btn) { btn.disabled = false; btn.textContent = 'UNLOCK (1 SP)'; }
+      }
+    }
+    if (this.prog.unlockedSkills.has('void_core')) {
+      const node = document.querySelector('.skill-node[data-skill="dimensional_sever"]');
+      if (node && !this.prog.unlockedSkills.has('dimensional_sever')) {
+        node.className = 'skill-node available';
+        const btn = node.querySelector('.btn-unlock-skill');
+        if (btn) { btn.disabled = false; btn.textContent = 'UNLOCK (1 SP)'; }
+      }
+    }
+  }
+
+  handleWorldMapFastTravel(clickX, clickY) {
+    if (!this.world || !this.game || !this.game.char) return;
+    const w = this.worldMapCanvas.width;
+    const h = this.worldMapCanvas.height;
+
+    // Shrine target points on the 2D map
+    const targets = [
+      { name: 'Kamitsuki Sanctuary Shrine', mapX: w * 0.45, mapY: h * 0.45, worldX: 0, worldZ: 5 },
+      { name: 'Whispering Bamboo Shrine', mapX: w * 0.75, mapY: h * 0.45, worldX: 60, worldZ: -10 },
+      { name: 'Citadel Rampart Shrine', mapX: w * 0.22, mapY: h * 0.25, worldX: -60, worldZ: -50 },
+      { name: 'Void Crater Gate Shrine', mapX: w * 0.8, mapY: h * 0.8, worldX: 70, worldZ: 80 }
+    ];
+
+    let closest = null;
+    let minDist = 90;
+
+    targets.forEach(t => {
+      const dist = Math.hypot(clickX - t.mapX, clickY - t.mapY);
+      if (dist < minDist) {
+        minDist = dist;
+        closest = t;
+      }
+    });
+
+    if (closest) {
+      const groundY = this.world.getTerrainHeight(closest.worldX, closest.worldZ);
+      this.game.char.position.set(closest.worldX, groundY, closest.worldZ);
+      if (window.soundEngine) window.soundEngine.playLevelUp();
+      this.showToast(`🌸 Fast Travelled to ${closest.name}!`);
+      this.toggleMenu(false);
+    }
   }
 
   // =========================================================================
@@ -422,7 +569,7 @@ class UIController {
     if (voidFill) voidFill.style.width = `${voidPct}%`;
     if (voidText) voidText.textContent = this.combat.isAwakened ? `AWAKENED ${Math.ceil(this.combat.awakenedTimer)}s` : `VOID ${Math.floor(voidPct)}% [T]`;
 
-    // 2. Currencies & Biome
+    // 2. Currencies, Biome & Weather
     const gold = document.getElementById('hudGold');
     if (gold) gold.textContent = this.prog.gold;
     const shards = document.getElementById('hudVoidShards');
@@ -430,6 +577,48 @@ class UIController {
 
     const zoneEl = document.getElementById('hudZoneName');
     if (zoneEl) zoneEl.textContent = this.world.currentBiome;
+
+    const weatherEl = document.getElementById('hudTimeWeather');
+    if (weatherEl) {
+      if (this.world.isEclipse) {
+        weatherEl.textContent = '🌑 ECLIPSE | VOID STORM';
+      } else {
+        const tod = this.world.timeOfDay;
+        if (tod < 0.3) weatherEl.textContent = '🌅 SUNRISE | CLEAR';
+        else if (tod < 0.65) weatherEl.textContent = '☀️ NOON | SAKURA BREEZE';
+        else if (tod < 0.8) weatherEl.textContent = '🌇 TWILIGHT | RAIN';
+        else weatherEl.textContent = '🌙 MIDNIGHT | STARRY';
+      }
+    }
+
+    // Hotbar Potion Counter
+    const pot = this.prog.inventory.find(i => i.id.startsWith('pot_heal'));
+    const potEl = document.getElementById('potionCount');
+    if (potEl) {
+      potEl.textContent = pot ? `x${pot.count}` : 'x0';
+    }
+
+    // Player Level Badge
+    const lvlBadge = document.getElementById('hudCharLevel');
+    if (lvlBadge) lvlBadge.textContent = `LV.${this.prog.level}`;
+
+    // Update Stats in Pause Menu Character tab
+    const sLvl = document.getElementById('statLevel');
+    if (sLvl) sLvl.textContent = this.prog.level;
+    const sXp = document.getElementById('statXp');
+    if (sXp) sXp.textContent = `${this.prog.xp} / ${this.prog.xpToNextLevel}`;
+    const sHp = document.getElementById('statHp');
+    if (sHp) sHp.textContent = this.prog.currentStats ? this.prog.currentStats.hp : 1000;
+    const sSt = document.getElementById('statStamina');
+    if (sSt) sSt.textContent = this.prog.currentStats ? this.prog.currentStats.stamina : 200;
+    const sAtk = document.getElementById('statAtk');
+    if (sAtk) sAtk.textContent = this.prog.currentStats ? this.prog.currentStats.atk : 125;
+    const sDef = document.getElementById('statDef');
+    if (sDef) sDef.textContent = this.prog.currentStats ? this.prog.currentStats.def : 45;
+    const sVoid = document.getElementById('statVoidPower');
+    if (sVoid) sVoid.textContent = this.prog.currentStats ? this.prog.currentStats.voidPower : 80;
+    const sCrit = document.getElementById('statCrit');
+    if (sCrit) sCrit.textContent = this.prog.currentStats ? this.prog.currentStats.crit : '15%';
 
     // 3. Cooldown Overlays
     this.updateCdSlot('cdSkill1', this.combat.cooldowns.skill1, this.combat.maxCooldowns.skill1);

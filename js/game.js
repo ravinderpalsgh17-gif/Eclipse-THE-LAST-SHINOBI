@@ -89,7 +89,7 @@ class GameEngine {
     this.particles = new ParticleSystem(this.scene);
     this.world = new World3D(this.scene, this.particles);
     this.char = new Character3D(this.scene, 'ren');
-    this.enemies = new EnemyManager(this.scene, this.particles);
+    this.enemies = new EnemyManager(this.scene, this.particles, this.world);
     this.combat = new CombatEngine(this, this.char, this.enemies, this.world, this.particles);
     this.prog = new ProgressionManager(this.combat);
     this.story = new StoryDirector(this, this.combat, this.prog, this.enemies, this.world);
@@ -124,10 +124,29 @@ class GameEngine {
         return;
       }
 
-      // Interaction [E]
+      // Interaction [E] or Skill 2 (Void Wave)
       if (e.code === 'KeyE') {
-        this.handleWorldInteraction();
+        const didInteract = this.handleWorldInteraction();
+        if (!didInteract) {
+          this.combat.useSkill2();
+        }
         return;
+      }
+
+      // Dodge / Dash [Shift]
+      if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
+        if (!this.combat.isDodging && !this.story.isCutsceneActive) {
+          const move = new THREE.Vector3();
+          if (this.keys['KeyW']) move.z += 1;
+          if (this.keys['KeyS']) move.z -= 1;
+          if (this.keys['KeyA']) move.x -= 1;
+          if (this.keys['KeyD']) move.x += 1;
+
+          const forward = new THREE.Vector3(-Math.sin(this.cameraYaw), 0, -Math.cos(this.cameraYaw));
+          const right = new THREE.Vector3(Math.cos(this.cameraYaw), 0, -Math.sin(this.cameraYaw));
+          const dir = new THREE.Vector3().addScaledVector(forward, move.z).addScaledVector(right, move.x);
+          this.combat.performDodge(dir);
+        }
       }
 
       // Ninjutsu Skills & Combat Hotkeys
@@ -162,6 +181,9 @@ class GameEngine {
         return;
       }
       if (this.ui.isMenuOpen) return;
+      if (e.target && (e.target.closest('#gameHud') || e.target.closest('#pauseMenuModal') || e.target.closest('#titleScreen') || e.target.closest('#cinematicDialogue') || e.target.closest('#gameOverModal'))) {
+        return;
+      }
 
       if (e.button === 0) {
         // Left Click: Light Attack
@@ -227,7 +249,7 @@ class GameEngine {
         if (window.soundEngine) window.soundEngine.playChestOpen();
         this.ui.showToast(`Looted: 🪙 ${r.gold} Gold &bull; 🔮 ${r.shards} Void Shards!`);
         this.ui.renderInventory();
-        return;
+        return true;
       }
     }
 
@@ -241,7 +263,7 @@ class GameEngine {
         this.particles.spawnSparks(s.position, 30, 0x06d6a0);
         if (window.soundEngine) window.soundEngine.playLevelUp();
         this.ui.showToast('🌸 Shrine Activated: Full Vitality Restored & Game Saved!');
-        return;
+        return true;
       }
     }
 
@@ -251,9 +273,11 @@ class GameEngine {
         this.story.playCutscene([
           { speaker: n.userData.name, role: n.userData.title, text: n.userData.dialogue, char: n.userData.npcId }
         ]);
-        return;
+        return true;
       }
     }
+
+    return false;
   }
 
   // =========================================================================
@@ -321,17 +345,34 @@ class GameEngine {
     if (Math.abs(gp.axes[3]) > 0.15) this.cameraPitch = Math.max(0.08, Math.min(1.2, this.cameraPitch + gp.axes[3] * 0.03));
 
     // Buttons: [0] Jump, [1] Dash, [2] Attack, [3] Heavy
-    if (gp.buttons[2].pressed && !this.gpAttackPressed) {
+    if (gp.buttons[0] && gp.buttons[0].pressed && this.char.isGrounded) {
+      this.char.velocity.y = 10.5;
+      this.char.isGrounded = false;
+      this.char.animState = 'jump';
+      if (window.soundEngine) window.soundEngine.playDash();
+    }
+
+    if (gp.buttons[1] && gp.buttons[1].pressed && !this.gpDashPressed) {
+      const forward = new THREE.Vector3(-Math.sin(this.cameraYaw), 0, -Math.cos(this.cameraYaw));
+      const right = new THREE.Vector3(Math.cos(this.cameraYaw), 0, -Math.sin(this.cameraYaw));
+      const dir = new THREE.Vector3().addScaledVector(forward, -ly).addScaledVector(right, lx);
+      this.combat.performDodge(dir);
+      this.gpDashPressed = true;
+    } else if (gp.buttons[1] && !gp.buttons[1].pressed) {
+      this.gpDashPressed = false;
+    }
+
+    if (gp.buttons[2] && gp.buttons[2].pressed && !this.gpAttackPressed) {
       this.combat.performLightAttack();
       this.gpAttackPressed = true;
-    } else if (!gp.buttons[2].pressed) {
+    } else if (gp.buttons[2] && !gp.buttons[2].pressed) {
       this.gpAttackPressed = false;
     }
 
-    if (gp.buttons[3].pressed && !this.gpHeavyPressed) {
+    if (gp.buttons[3] && gp.buttons[3].pressed && !this.gpHeavyPressed) {
       this.combat.performHeavyAttack();
       this.gpHeavyPressed = true;
-    } else if (!gp.buttons[3].pressed) {
+    } else if (gp.buttons[3] && !gp.buttons[3].pressed) {
       this.gpHeavyPressed = false;
     }
 
@@ -343,7 +384,14 @@ class GameEngine {
   // =========================================================================
 
   updatePlayer(delta) {
-    if (this.combat.isDodging || this.story.isCutsceneActive) return;
+    if (this.story.isCutsceneActive) return;
+
+    if (this.combat.isDodging) {
+      this.char.position.addScaledVector(this.char.velocity, delta);
+      const floorY = this.world.getTerrainHeight(this.char.position.x, this.char.position.z);
+      this.char.position.y = floorY;
+      return;
+    }
 
     const gpInput = this.pollGamepad();
 
