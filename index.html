@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>ECLIPSE: THE LAST SHINOBI - AAA Anime Action RPG</title>
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800;900&family=Noto+Sans+JP:wght@400;700;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Stylesheets -->
+  <link rel="stylesheet" href="css/style.css">
+  
+  <!-- Three.js (Offline local fallback + CDN fallback) -->
+  <script src="js/lib/three.min.js"></script>
+</head>
+<body class="loading-state">
+
+  <!-- 3D Canvas Viewport -->
+  <div id="gameContainer">
+    <canvas id="gameCanvas"></canvas>
+  </div>
+
+  <!-- Action Vignette & Post-FX Overlays -->
+  <div id="speedlines" class="post-fx-overlay hidden"></div>
+  <div id="hitVignette" class="post-fx-overlay"></div>
+  <div id="awakeningOverlay" class="post-fx-overlay hidden"></div>
+
+  <!-- Cinematic Letterbox Bars -->
+  <div id="cinematicTopBar" class="cinematic-bar top"></div>
+  <div id="cinematicBottomBar" class="cinematic-bar bottom"></div>
+
+  <!-- ========================================================================= -->
+  <!-- ACTIVE GAME HUD -->
+  <!-- ========================================================================= -->
+  <div id="gameHud" class="hud-container hidden">
+    
+    <!-- Top-Left: Player Vitality Status -->
+    <div class="player-hud-card">
+      <div class="avatar-ring">
+        <div id="hudCharAvatar" class="avatar-img ren-avatar"></div>
+        <div id="hudCharLevel" class="level-badge">LV.1</div>
+      </div>
+      
+      <div class="vitality-meters">
+        <div class="meter-info">
+          <span id="hudCharName" class="char-name">REN</span>
+          <span id="hudCharTitle" class="char-title">SHADOW OF THE ECLIPSE</span>
+        </div>
+
+        <!-- Health Bar -->
+        <div class="meter-bar hp-bar-bg">
+          <div id="hudHpFill" class="meter-fill hp-fill" style="width: 100%;"></div>
+          <div id="hudHpText" class="meter-text">1000 / 1000</div>
+        </div>
+
+        <!-- Stamina Bar -->
+        <div class="meter-bar st-bar-bg">
+          <div id="hudStaminaFill" class="meter-fill st-fill" style="width: 100%;"></div>
+          <div id="hudStaminaText" class="meter-text">200 / 200</div>
+        </div>
+
+        <!-- Eclipse Awakening / Void Meter -->
+        <div class="meter-bar void-bar-bg">
+          <div id="hudVoidFill" class="meter-fill void-fill" style="width: 0%;"></div>
+          <div id="hudVoidText" class="meter-text">VOID 0% [T]</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Top-Right: Radar Minimap & World Status -->
+    <div class="minimap-card">
+      <div class="minimap-header">
+        <span id="hudZoneName" class="zone-name">🌸 KAMITSUKI SANCTUARY</span>
+        <span id="hudTimeWeather" class="time-weather">☀️ NOON | CLEAR</span>
+      </div>
+      <div class="minimap-frame">
+        <canvas id="minimapCanvas" width="160" height="160"></canvas>
+        <div class="minimap-compass-n">N</div>
+        <div class="player-center-blip"></div>
+      </div>
+      <div class="quick-currencies">
+        <span class="currency-tag">🪙 <strong id="hudGold">250</strong></span>
+        <span class="currency-tag">🔮 <strong id="hudVoidShards">5</strong></span>
+      </div>
+    </div>
+
+    <!-- Top-Center: Target Lock-On / Boss Health Bar -->
+    <div id="bossHud" class="boss-hud-card hidden">
+      <div class="boss-info">
+        <span id="bossTitle" class="boss-title">SOVEREIGN OF THE VOID</span>
+        <span id="bossName" class="boss-name">GENERAL KUROGANE</span>
+      </div>
+      <div class="boss-hp-frame">
+        <div id="bossHpFill" class="boss-hp-fill" style="width: 100%;"></div>
+        <div id="bossHpGhost" class="boss-hp-ghost"></div>
+      </div>
+      <div class="boss-stagger-frame">
+        <div id="bossStaggerFill" class="boss-stagger-fill" style="width: 0%;"></div>
+        <span class="stagger-label">POSTURE / STAGGER</span>
+      </div>
+    </div>
+
+    <!-- Combo Counter Display -->
+    <div id="comboContainer" class="combo-container hidden">
+      <div id="comboHits" class="combo-hits">0</div>
+      <div class="combo-label">COMBO HITS</div>
+      <div id="comboRank" class="combo-rank">SSS</div>
+      <div id="comboDamage" class="combo-damage">+0 DMG</div>
+    </div>
+
+    <!-- Active Quest Tracker (Right Side) -->
+    <div id="questTracker" class="quest-tracker">
+      <div class="quest-tracker-title">📜 ACTIVE QUEST</div>
+      <div id="questName" class="quest-current-name">Chapter 1: The Awakening in Ash</div>
+      <div id="questObjective" class="quest-current-desc">Defeat the Voidborn prowlers near the village gate (0/3)</div>
+      <div class="quest-distance-hint">📍 Objective: <span id="questDistance">45m Ahead</span></div>
+    </div>
+
+    <!-- Center Interaction Prompt -->
+    <div id="interactPrompt" class="interact-prompt hidden">
+      <span class="key-badge">E</span>
+      <span id="interactText" class="prompt-text">Open Golden Chest</span>
+    </div>
+
+    <!-- Bottom Center: Ninjutsu Skills & Combat Hotbar -->
+    <div class="combat-hotbar">
+      <!-- Skill 1 -->
+      <div class="skill-slot" id="slotSkill1" title="Shadow Dash [Q]">
+        <div class="skill-icon icon-dash"></div>
+        <div class="skill-key">Q</div>
+        <div class="skill-cd-overlay" id="cdSkill1"></div>
+        <div class="skill-name">SHADOW DASH</div>
+      </div>
+
+      <!-- Skill 2 -->
+      <div class="skill-slot" id="slotSkill2" title="Void Crescent Slash [E]">
+        <div class="skill-icon icon-slash"></div>
+        <div class="skill-key">E</div>
+        <div class="skill-cd-overlay" id="cdSkill2"></div>
+        <div class="skill-name">VOID WAVE</div>
+      </div>
+
+      <!-- Skill 3 -->
+      <div class="skill-slot" id="slotSkill3" title="Thunder Step [R]">
+        <div class="skill-icon icon-thunder"></div>
+        <div class="skill-key">R</div>
+        <div class="skill-cd-overlay" id="cdSkill3"></div>
+        <div class="skill-name">THUNDER STEP</div>
+      </div>
+
+      <!-- Ultimate Ability -->
+      <div class="skill-slot ult-slot" id="slotUltimate" title="Secret Art: Eclipse Horizon [F]">
+        <div class="skill-icon icon-ult"></div>
+        <div class="skill-key">F</div>
+        <div class="skill-cd-overlay" id="cdUltimate"></div>
+        <div class="skill-name">ECLIPSE CLEAVE</div>
+      </div>
+
+      <!-- Awakening Transformation -->
+      <div class="skill-slot awakening-slot" id="slotAwakening" title="Eclipse Awakening [T]">
+        <div class="skill-icon icon-awakening"></div>
+        <div class="skill-key">T</div>
+        <div class="skill-cd-overlay" id="cdAwakening"></div>
+        <div class="skill-name">AWAKENING</div>
+      </div>
+
+      <!-- Consumables Quickslot -->
+      <div class="skill-slot potion-slot" id="slotPotion" title="Healing Elixir [1]">
+        <div class="skill-icon icon-potion"></div>
+        <div class="skill-key">1</div>
+        <div class="item-count" id="potionCount">x3</div>
+        <div class="skill-name">HEAL POTION</div>
+      </div>
+    </div>
+
+    <!-- Bottom Left: Controls Quick-Hint -->
+    <div class="controls-hint">
+      <span><kbd>WASD</kbd> Move</span>
+      <span><kbd>LMB</kbd> Attack</span>
+      <span><kbd>RMB</kbd> Heavy</span>
+      <span><kbd>SPACE</kbd> Jump</span>
+      <span><kbd>SHIFT</kbd> Dash</span>
+      <span><kbd>C</kbd> Parry/Block</span>
+      <span><kbd>TAB</kbd> Lock-on</span>
+      <span><kbd>M</kbd> Menu / Codex</span>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- CINEMATIC IN-ENGINE 3D DIALOGUE OVERLAY -->
+  <!-- ========================================================================= -->
+  <div id="cinematicDialogue" class="cinematic-dialogue hidden">
+    <div class="dialogue-box">
+      <div class="dialogue-speaker-card">
+        <div id="dialogueAvatar" class="dialogue-avatar"></div>
+        <div class="speaker-details">
+          <div id="dialogueSpeaker" class="speaker-name">REN</div>
+          <div id="dialogueRole" class="speaker-title">THE LAST SHINOBI</div>
+        </div>
+      </div>
+      <div class="dialogue-content">
+        <div id="dialogueText" class="dialogue-body">The seal of the Seven Warriors has shattered... The Eclipse is beginning.</div>
+        <div class="dialogue-audio-wave">
+          <span class="bar"></span><span class="bar"></span><span class="bar"></span><span class="bar"></span><span class="bar"></span>
+        </div>
+      </div>
+      <div class="dialogue-footer">
+        <span class="dialogue-hint">[SPACE / CLICK] Advance &nbsp;|&nbsp; [ESC] Skip Scene</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- NOTIFICATIONS & TOASTS BANNER -->
+  <!-- ========================================================================= -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <!-- Level Up Fullscreen FX Banner -->
+  <div id="levelUpBanner" class="level-up-banner hidden">
+    <div class="levelup-glow"></div>
+    <div class="levelup-title">⚡ LEVEL UP! ⚡</div>
+    <div id="levelUpSub" class="levelup-sub">You have reached Level 2</div>
+    <div class="levelup-perks">+100 Max HP &bull; +20 Attack Power &bull; +1 Skill Point Acquired</div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- FULL PAUSE MENU / HUB MODAL (INVENTORY, SKILL TREE, QUESTS, SETTINGS) -->
+  <!-- ========================================================================= -->
+  <div id="pauseMenuModal" class="modal-backdrop hidden">
+    <div class="pause-menu-window">
+      <!-- Menu Navigation Tabs -->
+      <div class="menu-tabs-bar">
+        <button class="menu-tab active" data-tab="tabCharacter">👤 CHARACTER</button>
+        <button class="menu-tab" data-tab="tabInventory">🎒 INVENTORY</button>
+        <button class="menu-tab" data-tab="tabSkillTree">🔮 SKILL TREE</button>
+        <button class="menu-tab" data-tab="tabQuests">📜 QUEST JOURNAL</button>
+        <button class="menu-tab" data-tab="tabWorldMap">🗺️ AETHERIA MAP</button>
+        <button class="menu-tab" data-tab="tabSettings">⚙️ SETTINGS</button>
+        <button id="btnCloseMenu" class="btn-close-menu">&times;</button>
+      </div>
+
+      <!-- Tab 1: Character & Stats -->
+      <div id="tabCharacter" class="tab-pane active">
+        <div class="char-view-grid">
+          <div class="char-roster-column">
+            <h3>SELECT ACTIVE FIGHTER</h3>
+            <div class="roster-card active" data-char="ren">
+              <div class="roster-avatar ren-avatar"></div>
+              <div class="roster-details">
+                <div class="roster-name">REN</div>
+                <div class="roster-sub">Shadow of the Eclipse</div>
+                <div class="roster-status">Dual Katanas &bull; Balanced</div>
+              </div>
+              <div class="roster-select-tag">ACTIVE</div>
+            </div>
+
+            <div class="roster-card" data-char="ayame">
+              <div class="roster-avatar ayame-avatar"></div>
+              <div class="roster-details">
+                <div class="roster-name">AYAME</div>
+                <div class="roster-sub">Gale Kunoichi</div>
+                <div class="roster-status">Wind Blades &bull; Extreme Agility</div>
+              </div>
+              <div class="roster-select-tag">SELECT</div>
+            </div>
+
+            <div class="roster-card" data-char="kaito">
+              <div class="roster-avatar kaito-avatar"></div>
+              <div class="roster-details">
+                <div class="roster-name">KAITO</div>
+                <div class="roster-sub">Thunder Dragon Ronin</div>
+                <div class="roster-status">Heavy Nodachi &bull; High Poise</div>
+              </div>
+              <div class="roster-select-tag">SELECT</div>
+            </div>
+          </div>
+
+          <div class="char-stats-column">
+            <h3 id="statHeaderName">REN - ATTRIBUTES</h3>
+            <div class="stats-table">
+              <div class="stat-row"><span>Combat Level</span><strong id="statLevel">1</strong></div>
+              <div class="stat-row"><span>Experience Points</span><strong id="statXp">0 / 200</strong></div>
+              <div class="stat-row"><span>Maximum Health (HP)</span><strong id="statHp">1,000</strong></div>
+              <div class="stat-row"><span>Maximum Stamina</span><strong id="statStamina">200</strong></div>
+              <div class="stat-row"><span>Physical Attack (ATK)</span><strong id="statAtk">125</strong></div>
+              <div class="stat-row"><span>Defense Rating (DEF)</span><strong id="statDef">45</strong></div>
+              <div class="stat-row"><span>Void Affinity / Magic</span><strong id="statVoidPower">80</strong></div>
+              <div class="stat-row"><span>Critical Hit Rate</span><strong id="statCrit">15%</strong></div>
+            </div>
+
+            <div class="active-transformation-preview">
+              <h4>TRANSFORMATION: ECLIPSE AWAKENING</h4>
+              <p>Unleashes the ancient Umbral Core within Ren's soul. Grants dark flame wings, +100% attack speed, continuous Void wave projectiles, and infinite stamina during activation.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 2: Inventory & Equipment -->
+      <div id="tabInventory" class="tab-pane">
+        <div class="inventory-layout">
+          <div class="equipment-slots-column">
+            <h3>CURRENT GEAR</h3>
+            <div class="equip-slot" id="equipWeaponSlot">
+              <div class="equip-label">PRIMARY WEAPON</div>
+              <div class="equip-item-name" id="equippedWeaponName">⚔️ Shadow Katana (Common)</div>
+              <div class="equip-item-stats">+25 ATK &bull; Fast Swing Speed</div>
+            </div>
+
+            <div class="equip-slot" id="equipOffhandSlot">
+              <div class="equip-label">OFF-HAND WEAPON</div>
+              <div class="equip-item-name" id="equippedOffhandName">🗡️ Sunburst Wakizashi</div>
+              <div class="equip-item-stats">+15 ATK &bull; Dual Wield Combo Unlocked</div>
+            </div>
+
+            <div class="equip-slot" id="equipArmorSlot">
+              <div class="equip-label">BODY ARMOUR</div>
+              <div class="equip-item-name" id="equippedArmorName">🥋 Shinobi Shadow Gi</div>
+              <div class="equip-item-stats">+30 DEF &bull; +15% Dodge Distance</div>
+            </div>
+
+            <div class="equip-slot" id="equipRelicSlot">
+              <div class="equip-label">MYSTIC AMULET</div>
+              <div class="equip-item-name" id="equippedRelicName">📿 Seven Sovereigns' Seal</div>
+              <div class="equip-item-stats">+50 Max HP &bull; +10% Void Gain</div>
+            </div>
+          </div>
+
+          <div class="inventory-grid-column">
+            <div class="inv-header-row">
+              <h3>ITEMS & RELICS (<span id="invCount">4</span> / 24)</h3>
+              <div class="inv-wallet">🪙 Gold: <span id="invGold">250</span> &nbsp;|&nbsp; 🔮 Void Shards: <span id="invVoidShards">5</span></div>
+            </div>
+            <div class="inventory-grid" id="inventoryGrid">
+              <!-- Dynamically populated item cards -->
+            </div>
+            <div class="inventory-item-details" id="itemDetailBox">
+              <h4 id="detailTitle">Select an item to view stats</h4>
+              <p id="detailDesc">Hover or click on equipment, potions, or treasures in your bag.</p>
+              <div id="detailActionRow" class="item-action-row hidden">
+                <button id="btnEquipItem" class="btn-primary-action">EQUIP</button>
+                <button id="btnUseItem" class="btn-primary-action">USE</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 3: Interactive Skill Tree -->
+      <div id="tabSkillTree" class="tab-pane">
+        <div class="skilltree-container">
+          <div class="skilltree-header">
+            <h3>SHINOBI MASTERY SKILL TREE</h3>
+            <div class="skill-points-badge">AVAILABLE POINTS: <strong id="skillPointsCount">1</strong></div>
+          </div>
+          <div class="skilltree-branches-grid">
+            <!-- Branch 1: Kenjutsu (Blade Mastery) -->
+            <div class="skill-branch">
+              <h4>🗡️ KENJUTSU (SWORD MASTERY)</h4>
+              <div class="skill-node unlocked" data-skill="flurry">
+                <div class="node-icon">⚔️</div>
+                <div class="node-text">
+                  <div class="node-name">Dual Blade Flurry</div>
+                  <div class="node-desc">Extends normal sword combo to 4 fluid strikes.</div>
+                </div>
+                <div class="node-status">MASTERED</div>
+              </div>
+
+              <div class="skill-node available" data-skill="parry_counter">
+                <div class="node-icon">🛡️</div>
+                <div class="node-text">
+                  <div class="node-name">Flash Parry Counter</div>
+                  <div class="node-desc">Perfect parry triggers time-dilation and automatic high-damage counter-cut.</div>
+                </div>
+                <button class="btn-unlock-skill" data-skill="parry_counter">UNLOCK (1 SP)</button>
+              </div>
+
+              <div class="skill-node locked" data-skill="aerial_cleave">
+                <div class="node-icon">🌪️</div>
+                <div class="node-text">
+                  <div class="node-name">Rising Gale Cleave</div>
+                  <div class="node-desc">Launches staggered enemies into the air for aerial juggles.</div>
+                </div>
+                <button class="btn-unlock-skill" disabled data-skill="aerial_cleave">REQ: PARRY</button>
+              </div>
+            </div>
+
+            <!-- Branch 2: Ninjutsu (Elemental Arts) -->
+            <div class="skill-branch">
+              <h4>🔥 NINJUTSU (ELEMENTAL ARTS)</h4>
+              <div class="skill-node unlocked" data-skill="void_wave">
+                <div class="node-icon">🌊</div>
+                <div class="node-text">
+                  <div class="node-name">Void Crescent Wave</div>
+                  <div class="node-desc">Unleashes a dark piercing crescent blade projectile.</div>
+                </div>
+                <div class="node-status">MASTERED</div>
+              </div>
+
+              <div class="skill-node available" data-skill="dragon_fire">
+                <div class="node-icon">🐉</div>
+                <div class="node-text">
+                  <div class="node-name">Dragon Flame Burst</div>
+                  <div class="node-desc">Adds incendiary burn damage to all heavy sword strikes.</div>
+                </div>
+                <button class="btn-unlock-skill" data-skill="dragon_fire">UNLOCK (1 SP)</button>
+              </div>
+
+              <div class="skill-node locked" data-skill="thunder_god">
+                <div class="node-icon">⚡</div>
+                <div class="node-text">
+                  <div class="node-name">Thunder God Flash</div>
+                  <div class="node-desc">Thunder Step now electrocutes all surrounding targets with chain lightning.</div>
+                </div>
+                <button class="btn-unlock-skill" disabled data-skill="thunder_god">REQ: DRAGON</button>
+              </div>
+            </div>
+
+            <!-- Branch 3: Umbral Arts (Void & Awakening) -->
+            <div class="skill-branch">
+              <h4>🌑 UMBRAL ARTS (ECLIPSE)</h4>
+              <div class="skill-node unlocked" data-skill="shadow_dash">
+                <div class="node-icon">👤</div>
+                <div class="node-text">
+                  <div class="node-name">Shadow Decoy Dash</div>
+                  <div class="node-desc">Dodge leaves a decoy clone that draws enemy aggro.</div>
+                </div>
+                <div class="node-status">MASTERED</div>
+              </div>
+
+              <div class="skill-node available" data-skill="void_core">
+                <div class="node-icon">🔮</div>
+                <div class="node-text">
+                  <div class="node-name">Awakened Umbral Core</div>
+                  <div class="node-desc">Increases Eclipse Awakening duration by 10s and increases Void generation by 50%.</div>
+                </div>
+                <button class="btn-unlock-skill" data-skill="void_core">UNLOCK (1 SP)</button>
+              </div>
+
+              <div class="skill-node locked" data-skill="dimensional_sever">
+                <div class="node-icon">✨</div>
+                <div class="node-text">
+                  <div class="node-name">Dimensional Severance</div>
+                  <div class="node-desc">Ultimate Cleave cuts through all boss defenses and bypasses shields.</div>
+                </div>
+                <button class="btn-unlock-skill" disabled data-skill="dimensional_sever">REQ: CORE</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 4: Quests Journal -->
+      <div id="tabQuests" class="tab-pane">
+        <div class="quests-container">
+          <div class="quests-column">
+            <h3>MAIN STORY SAGA</h3>
+            <div class="quest-entry active">
+              <div class="quest-title-row">
+                <span class="quest-bullet">⚡</span>
+                <span class="quest-title-text">Chapter 1: The Awakening in Ash</span>
+                <span class="quest-tag main">IN PROGRESS</span>
+              </div>
+              <p class="quest-summary">Awakened after the fall of the Seven Sovereigns, Ren must defend the sacred Kamitsuki Sanctuary from invading Voidborn fiends.</p>
+              <div class="quest-task-checklist">
+                <div class="task-check done">✓ Awaken at the Sacred Lotus Shrine</div>
+                <div class="task-check active">▶ Defeat the 3 Voidborn Prowlers near the Gate (0/3)</div>
+                <div class="task-check pending">○ Speak with Elder Genzo at the Pagoda</div>
+              </div>
+            </div>
+
+            <div class="quest-entry">
+              <div class="quest-title-row">
+                <span class="quest-bullet">🔒</span>
+                <span class="quest-title-text">Chapter 2: Whispers in the Bamboo</span>
+                <span class="quest-tag locked">LOCKED</span>
+              </div>
+              <p class="quest-summary">Infiltrate the whispering bamboo forest to rendezvous with Ayame and recover the Sunburst Wakizashi.</p>
+            </div>
+
+            <div class="quest-entry">
+              <div class="quest-title-row">
+                <span class="quest-bullet">🔒</span>
+                <span class="quest-title-text">Chapter 3: The Corrupted Blade</span>
+                <span class="quest-tag locked">LOCKED</span>
+              </div>
+              <p class="quest-summary">Confront General Kurogane inside the Citadel of the Forgotten and sever his demonic bond.</p>
+            </div>
+          </div>
+
+          <div class="quests-column">
+            <h3>SIDE QUESTS & BOUNTIES</h3>
+            <div class="quest-entry active">
+              <div class="quest-title-row">
+                <span class="quest-bullet">💰</span>
+                <span class="quest-title-text">Bounty: The Obsidian Golem</span>
+                <span class="quest-tag bounty">ACTIVE</span>
+              </div>
+              <p class="quest-summary">Destroy the ancient corrupted golem guarding the Celestial Floating Bridge.</p>
+              <div class="quest-rewards">Reward: 🪙 500 Gold &bull; 🔮 10 Void Shards</div>
+            </div>
+
+            <div class="quest-entry">
+              <div class="quest-title-row">
+                <span class="quest-bullet">📜</span>
+                <span class="quest-title-text">Lost Scrolls of the Shinobi</span>
+                <span class="quest-tag side">AVAILABLE</span>
+              </div>
+              <p class="quest-summary">Collect 4 ancient ninja scroll fragments scattered across Kamitsuki and the Bamboo Forest.</p>
+              <div class="quest-rewards">Reward: 📿 Amulet of the Wind God &bull; +2 Skill Points</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 5: World Map -->
+      <div id="tabWorldMap" class="tab-pane">
+        <div class="worldmap-container">
+          <div class="worldmap-header">
+            <h3>CONTINENT OF AETHERIA</h3>
+            <div class="map-legend">
+              <span class="leg-item"><span class="dot player"></span> You</span>
+              <span class="leg-item"><span class="dot quest"></span> Objective</span>
+              <span class="leg-item"><span class="dot shrine"></span> Shrine / Teleport</span>
+              <span class="leg-item"><span class="dot boss"></span> Boss Danger</span>
+            </div>
+          </div>
+          <div class="worldmap-canvas-frame">
+            <canvas id="worldMapCanvas" width="800" height="480"></canvas>
+          </div>
+          <div class="worldmap-footer">
+            <span>Fast Travel to discovered Torii Shrines by clicking on their glowing icons.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 6: Settings & Keybindings -->
+      <div id="tabSettings" class="tab-pane">
+        <div class="settings-grid">
+          <div class="settings-group">
+            <h3>GRAPHICS & PERFORMANCE</h3>
+            <div class="setting-row">
+              <label for="selectGraphicsPreset">Graphics Preset</label>
+              <select id="selectGraphicsPreset">
+                <option value="ultra" selected>4K Ultra (UE5 Cel-Shaded Anime)</option>
+                <option value="high">High (Dynamic Shadows & Volumetric Fog)</option>
+                <option value="medium">Performance (60 FPS Optimized)</option>
+              </select>
+            </div>
+
+            <div class="setting-row">
+              <label for="toggleBloom">Anime Bloom & Glow VFX</label>
+              <input type="checkbox" id="toggleBloom" checked>
+            </div>
+
+            <div class="setting-row">
+              <label for="toggleShadows">Dynamic Soft Shadows</label>
+              <input type="checkbox" id="toggleShadows" checked>
+            </div>
+
+            <div class="setting-row">
+              <label for="toggleWeather">Dynamic Rain & Eclipse Weather</label>
+              <input type="checkbox" id="toggleWeather" checked>
+            </div>
+          </div>
+
+          <div class="settings-group">
+            <h3>AUDIO & VOICE ACTING</h3>
+            <div class="setting-row">
+              <label for="sliderMasterVol">Master Volume</label>
+              <input type="range" id="sliderMasterVol" min="0" max="100" value="85">
+            </div>
+
+            <div class="setting-row">
+              <label for="sliderMusicVol">Orchestral Anime BGM</label>
+              <input type="range" id="sliderMusicVol" min="0" max="100" value="75">
+            </div>
+
+            <div class="setting-row">
+              <label for="sliderSfxVol">Combat Sound Effects (SFX)</label>
+              <input type="range" id="sliderSfxVol" min="0" max="100" value="90">
+            </div>
+
+            <div class="setting-row">
+              <label for="toggleVoice">Live Character Voice Synthesis</label>
+              <input type="checkbox" id="toggleVoice" checked>
+            </div>
+          </div>
+
+          <div class="settings-group full-width">
+            <h3>GAME STORAGE & PROGRESS</h3>
+            <div class="storage-action-row">
+              <button id="btnManualSave" class="btn-storage save">💾 SAVE GAME</button>
+              <button id="btnManualLoad" class="btn-storage load">📂 LOAD SAVE</button>
+              <button id="btnResetProgress" class="btn-storage danger">⚠️ RESET PROGRESS</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- TITLE & LAUNCH SCREEN -->
+  <!-- ========================================================================= -->
+  <div id="titleScreen" class="title-screen-container">
+    <div class="title-bg-particles"></div>
+    <div class="title-eclipse-ring"></div>
+
+    <div class="title-content-card">
+      <div class="kanji-subtitle">最後の忍 &bull; 冥王の覚醒</div>
+      <h1 class="main-title">ECLIPSE</h1>
+      <h2 class="sub-title">THE LAST SHINOBI</h2>
+      <div class="version-tag">4K ULTRA ANIME ACTION RPG &bull; V1.0.0</div>
+
+      <div class="title-menu-actions">
+        <button id="btnStartAdventure" class="btn-title primary">⚡ EMBARK ON ADVENTURE ⚡</button>
+        <button id="btnContinueGame" class="btn-title secondary">📂 CONTINUE JOURNEY</button>
+        <button id="btnCodexControls" class="btn-title tertiary">📜 CONTROLS & HOW TO PLAY</button>
+      </div>
+
+      <div class="audio-permission-hint">🔊 Click to Initialize 3D Engine, Orchestral Audio & Voice Acting</div>
+    </div>
+
+    <div class="title-footer-banner">
+      <span>Developed with Three.js WebGL &bull; Dual-Wield Combat &bull; Seamless Open World &bull; Real-Time Voice Synthesis</span>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- GAME OVER / REAWAKEN MODAL -->
+  <!-- ========================================================================= -->
+  <div id="gameOverModal" class="gameover-container hidden">
+    <div class="gameover-card">
+      <h2 class="gameover-title">DEFEATED</h2>
+      <p class="gameover-text">Your soul has fallen to the Void... But the Umbral Core pulses once more.</p>
+      <div class="gameover-actions">
+        <button id="btnRespawnShrine" class="btn-title primary">🌸 REAWAKEN AT SHRINE</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- SCRIPTS ARCHITECTURE -->
+  <!-- ========================================================================= -->
+  <script src="js/audio.js"></script>
+  <script src="js/particles.js"></script>
+  <script src="js/world3d.js"></script>
+  <script src="js/character3d.js"></script>
+  <script src="js/enemies3d.js"></script>
+  <script src="js/combat.js"></script>
+  <script src="js/progression.js"></script>
+  <script src="js/story.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/game.js"></script>
+</body>
+</html>
